@@ -1,0 +1,274 @@
+openapi: 3.0.3
+info:
+  title: Sofzenix eSign - Document Generation API Specification (Module 3)
+  description: OpenAPI 3.0 REST API specification for Document Templates, Dynamic Field Merging, Single PDF Generation, and Bulk Batch Jobs.
+  version: 1.0.0
+servers:
+  - url: https://api.sofzenix-esign.com/api/v1
+    description: Production API Server
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+
+paths:
+  /templates:
+    get:
+      summary: List all templates for organization
+      operationId: getTemplates
+      tags:
+        - Document Generation
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TemplateResponse'
+
+    post:
+      summary: Create a new document template
+      operationId: createTemplate
+      tags:
+        - Document Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+
+  /templates/{id}:
+    get:
+      summary: Get template by ID
+      operationId: getTemplateById
+      tags:
+        - Document Generation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+
+    delete:
+      summary: Soft delete template
+      operationId: deleteTemplate
+      tags:
+        - Document Generation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Template soft deleted
+
+  /generation/generate:
+    post:
+      summary: Generate a PDF document from a template and merge data
+      operationId: generateDocument
+      tags:
+        - Document Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateDocumentRequest'
+      responses:
+        '201':
+          description: Document generated and registered in Document Management module
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documentId:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  downloadUrl:
+                    type: string
+
+  /generation/bulk:
+    post:
+      summary: Start an asynchronous bulk batch document generation job
+      operationId: bulkGenerate
+      tags:
+        - Document Generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkGenerateRequest'
+      responses:
+        '202':
+          description: Bulk generation job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationJob'
+
+components:
+  schemas:
+    CreateTemplateRequest:
+      type: object
+      required:
+        - name:
+        - templateType
+        - contentBody
+      properties:
+        name:
+          type: string
+          example: Standard Non-Disclosure Agreement
+        description:
+          type: string
+        templateType:
+          type: string
+          enum: [CONTRACT, AGREEMENT, OFFER_LETTER, INVOICE, CUSTOM]
+        contentBody:
+          type: string
+          example: "<h1>NDA</h1><p>This agreement is between {{party_a}} and {{party_b}}...</p>"
+        headerHtml:
+          type: string
+        footerHtml:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateFieldDTO'
+
+    TemplateFieldDTO:
+      type: object
+      required:
+        - fieldKey
+        - fieldLabel
+      properties:
+        fieldKey:
+          type: string
+          example: party_a
+        fieldLabel:
+          type: string
+          example: First Party Name
+        fieldType:
+          type: string
+          enum: [TEXT, NUMBER, DATE, CURRENCY, BOOLEAN, SIGNATURE_MARKER]
+        isRequired:
+          type: boolean
+        defaultValue:
+          type: string
+
+    TemplateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        templateType:
+          type: string
+        contentBody:
+          type: string
+        versionNumber:
+          type: integer
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateFieldDTO'
+        createdAt:
+          type: string
+          format: date-time
+
+    GenerateDocumentRequest:
+      type: object
+      required:
+        - templateId
+        - documentTitle
+        - mergeData
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        documentTitle:
+          type: string
+          example: NDA - Acme Corp & Sofzenix
+        folderId:
+          type: string
+          format: uuid
+        watermark:
+          type: string
+          enum: [NONE, DRAFT, CONFIDENTIAL, EXPIRED, CUSTOM]
+        includeQrCodeVerification:
+          type: boolean
+        mergeData:
+          type: object
+          additionalProperties: true
+          example:
+            party_a: Sofzenix Solutions Pvt Ltd
+            party_b: Acme Corporation
+            effective_date: "2026-09-01"
+
+    BulkGenerateRequest:
+      type: object
+      required:
+        - templateId
+        - jobName
+        - records
+      properties:
+        templateId:
+          type: string
+          format: uuid
+        jobName:
+          type: string
+          example: Q3 Employee Offer Letter Batch Generation
+        records:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    GenerationJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        jobName:
+          type: string
+        status:
+          type: string
+          enum: [QUEUED, PROCESSING, COMPLETED, FAILED, CANCELLED]
+        totalRecords:
+          type: integer
+        processedRecords:
+          type: integer
+        failedRecords:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
